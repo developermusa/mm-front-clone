@@ -5,6 +5,14 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL
 const PUBLISHABLE_API_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
 const DEFAULT_REGION = process.env.NEXT_PUBLIC_DEFAULT_REGION || "us"
 
+// Validate environment variables
+if (!BACKEND_URL || !PUBLISHABLE_API_KEY) {
+  console.error("Missing required environment variables:", {
+    BACKEND_URL: !!BACKEND_URL,
+    PUBLISHABLE_API_KEY: !!PUBLISHABLE_API_KEY
+  })
+}
+
 const regionMapCache = {
   regionMap: new Map<string, HttpTypes.StoreRegion>(),
   regionMapUpdated: Date.now(),
