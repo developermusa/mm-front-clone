@@ -1,5 +1,4 @@
 const c = require("ansi-colors")
-
 const requiredEnvs = [
   {
     key: "NEXT_PUBLIC_BACKEND_URL",
