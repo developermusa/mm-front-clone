@@ -1,8 +1,8 @@
 import { HttpTypes } from "@medusajs/types"
 import { NextRequest, NextResponse } from "next/server"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL
-const PUBLISHABLE_API_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
+const BACKEND_URL = process.env.MEDUSA_BACKEND_URL
+const PUBLISHABLE_API_KEY = process.env.MEDUSA_PUBLISHABLE_KEY
 const DEFAULT_REGION = process.env.NEXT_PUBLIC_DEFAULT_REGION || "us"
 
 const regionMapCache = {
@@ -23,7 +23,10 @@ async function getRegionMap() {
     !regionMap.keys().next().value ||
     regionMapUpdated < Date.now() - 3600 * 1000
   ) {
-    console.log({ PUBLISHABLE_API_KEY })
+    console.log("Fetching regions from backend:", { 
+      BACKEND_URL, 
+      PUBLISHABLE_API_KEY: PUBLISHABLE_API_KEY ? "SET" : "NOT_SET" 
+    })
     
     try {
       // Fetch regions from Medusa. We can't use the JS client here because middleware is running on Edge and the client needs a Node environment.
@@ -37,15 +40,23 @@ async function getRegionMap() {
         },
       })
 
+      console.log("Backend response status:", response.status)
+
       if (!response.ok) {
         console.error(`Failed to fetch regions: ${response.status} ${response.statusText}`)
+        console.error("Backend URL:", BACKEND_URL)
+        console.error("Response headers:", Object.fromEntries(response.headers.entries()))
         return regionMapCache.regionMap
       }
 
-      const { regions } = await response.json()
+      const data = await response.json()
+      console.log("Regions response:", { regionsCount: data.regions?.length || 0 })
+      
+      const { regions } = data
 
       if (!regions?.length) {
         console.warn("No regions found in response")
+        console.warn("Response data:", data)
         // Avoid using Next.js navigation API in Middleware; fall back gracefully
         return regionMapCache.regionMap
       }
@@ -74,9 +85,16 @@ async function getRegionMap() {
         })
       })
 
+      console.log("Available country codes:", Array.from(regionMapCache.regionMap.keys()))
       regionMapCache.regionMapUpdated = Date.now()
     } catch (error) {
       console.error("Error fetching regions from Medusa backend:", error)
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        BACKEND_URL,
+        PUBLISHABLE_API_KEY: PUBLISHABLE_API_KEY ? "SET" : "NOT_SET"
+      })
       // If this is the first request and we have no cached regions, use dynamic fallback
       if (!regionMapCache.regionMap.keys().next().value && fallbackRegion) {
         fallbackRegion.countries?.forEach((country) => {
@@ -140,14 +158,33 @@ async function getCountryCode(
  */
 export async function middleware(request: NextRequest) {
   try {
+    console.log("Middleware processing request:", {
+      pathname: request.nextUrl.pathname,
+      search: request.nextUrl.search,
+      origin: request.nextUrl.origin
+    })
+
     const regionMap = await getRegionMap()
     const countryCode = regionMap && (await getCountryCode(request, regionMap))
+
+    console.log("Region detection result:", {
+      regionMapSize: regionMap?.size || 0,
+      countryCode,
+      availableRegions: regionMap ? Array.from(regionMap.keys()) : []
+    })
 
     const urlHasCountryCode =
       countryCode && request.nextUrl.pathname.split("/")[1].includes(countryCode)
 
+    console.log("URL analysis:", {
+      urlHasCountryCode,
+      pathSegments: request.nextUrl.pathname.split("/"),
+      firstSegment: request.nextUrl.pathname.split("/")[1]
+    })
+
     // check if one of the country codes is in the url
     if (urlHasCountryCode) {
+      console.log("Country code found in URL, proceeding")
       return NextResponse.next()
     }
 
@@ -164,13 +201,24 @@ export async function middleware(request: NextRequest) {
     if (!urlHasCountryCode && countryCode) {
       redirectUrl = `${request.nextUrl.origin}/${countryCode}${redirectPath}${queryString}`
       response = NextResponse.redirect(`${redirectUrl}`, 307)
+      console.log("Redirecting to:", redirectUrl)
+    } else if (!countryCode) {
+      console.warn("No country code available, using fallback")
+      redirectUrl = `${request.nextUrl.origin}/${DEFAULT_REGION_CODE}${redirectPath}${queryString}`
+      response = NextResponse.redirect(`${redirectUrl}`, 307)
     }
 
     return response
   } catch (error) {
     console.error("Middleware error:", error)
+    console.error("Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      pathname: request.nextUrl.pathname
+    })
     // Fallback: redirect to default region
     const redirectUrl = `${request.nextUrl.origin}/${DEFAULT_REGION_CODE}${request.nextUrl.pathname === "/" ? "" : request.nextUrl.pathname}${request.nextUrl.search || ""}`
+    console.log("Fallback redirect to:", redirectUrl)
     return NextResponse.redirect(redirectUrl, 307)
   }
 }

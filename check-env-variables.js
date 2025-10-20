@@ -2,12 +2,12 @@ const c = require("ansi-colors")
 
 const requiredEnvs = [
   {
-    key: "NEXT_PUBLIC_MEDUSA_BACKEND_URL",
+    key: "MEDUSA_BACKEND_URL",
     description:
       "Your Medusa backend, should be updated to where you are hosting your server. Remember to update CORS settings for your server. See - https://docs.medusajs.com/usage/configurations#admin_cors-and-store_cors.",
   },
   {
-    key: "NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY",
+    key: "MEDUSA_PUBLISHABLE_KEY",
     description:
       "Your publishable key that can be attached to sales channels. See - https://docs.medusajs.com/development/publishable-api-keys.",
   },
